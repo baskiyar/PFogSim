@@ -470,11 +470,6 @@ public class EdgeServerManager {
 				puddle.setMembers(hosts);
 				puddle.chooseNewHead();
 				
-				//Assign Parent relationships among Puddles belonging to adjacent fog layers.
-				puddle.setParentPuddleId(clusters.parentCluster[k][i]);
-				
-				//Assign parent and children host nodes from connected parent/child puddles
-				puddle.setNodeParentAndChildern();
 				
 				//Track resources in Puddles
 				puddle.updateResources();
@@ -495,20 +490,32 @@ public class EdgeServerManager {
 		//Assign Child relationships among Puddles belonging to adjacent fog layers.
 		for (int k=0; k<puddles.length; k++) {
 			for (int i=0; i<puddles[k].length; i++) {
-
+				//assign puddle as the current puddle being modified.
+				puddle = puddles[k][i];
+				
 				// Skip cloud, as it belongs to highest fog layer and does not have a parent.
-				if (puddles[k][i].getLevel() == MAX_HAFA_LEVEL)
+				if (puddle.getLevel() == MAX_HAFA_LEVEL)
 					continue;
 				
 				// for each puddle, get its parent info
-				int childPudId = puddles[k][i].getPuddleId();
-				int parentPudId = puddles[k][i].getParentPuddleId();
-				int childLayer = puddles[k][i].getLevel();
+				int childPudId = puddle.getPuddleId();
+				int parentPudId = clusters.parentCluster[k][i];
+				int childLayer = puddle.getLevel();
 				
-				System.out.println("Fog level: "+(childLayer+1)+" Parent Puddle Id: "+parentPudId);
+				//Assign Parent relationships among Puddles belonging to adjacent fog layers.
+				puddle.setParentPuddleId(parentPudId);
+				
 				// add itself to the list of children of that parent
 				findPuddleById(childLayer+1, parentPudId).getChildPuddleIds().add(childPudId);
-
+				
+				// add parent reference and add itself to parent.
+				puddle.setUp(findPuddleById(childLayer+1, parentPudId));
+				
+				//Assign parent and children host nodes from connected parent/child puddles
+				puddle.setNodeParentAndChildern();
+				
+				System.out.println("Fog level: "+(childLayer+1)+" Parent Puddle Id: "+parentPudId);
+				
 			}// end for i
 		}// end for k		
 		

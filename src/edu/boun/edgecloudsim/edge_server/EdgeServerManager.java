@@ -15,8 +15,6 @@ package edu.boun.edgecloudsim.edge_server;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
-
 import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
 import org.cloudbus.cloudsim.Datacenter;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
@@ -36,18 +34,14 @@ import org.w3c.dom.NodeList;
 
 import edu.boun.edgecloudsim.core.SimManager;
 import edu.boun.edgecloudsim.core.SimSettings;
-import edu.boun.edgecloudsim.utils.LinesComponent;
 //import edu.boun.edgecloudsim.utils.LinesComponent;
 import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimLogger;
-import edu.boun.edgecloudsim.utils.SimUtils;
 import edu.auburn.pFogSim.Puddle.Puddle;
-import edu.auburn.pFogSim.Radix.DistRadix;
+import edu.auburn.pFogSim.Radix.BinaryHeap;
 import edu.auburn.pFogSim.clustering.*;
 import edu.auburn.pFogSim.netsim.*;
-import edu.auburn.pFogSim.orchestrator.CloudOnlyOrchestrator;
 import edu.auburn.pFogSim.orchestrator.HAFAOrchestrator;
-import edu.auburn.pFogSim.util.DataInterpreter;
 
 
 /**
@@ -56,6 +50,10 @@ import edu.auburn.pFogSim.util.DataInterpreter;
  *
  */
 public class EdgeServerManager {
+	private static final int MAX_HAFA_LEVEL = 7;
+	private static final int ALTITUDE_INDEX = 2;
+	private static final int LATITUDE_INDEX = 1;
+	private static final int LONGITUDE_INDEX = 0;
 	private List<Datacenter> localDatacenters;
 	private List<List<EdgeVM>> vmList;
 	private List<EdgeHost> hostList;// we use this for mobile fog nodes, this is NOT a  list of all edgehosts in the network
@@ -142,19 +140,22 @@ public class EdgeServerManager {
 			Node links = linksList.item(i);
 			Element linkElement = (Element) links;
 			
+			
 			NodeList leftLinksList = linkElement.getElementsByTagName("left");
 			Node leftLinks = leftLinksList.item(0);
 			Element leftLinkss = (Element)leftLinks;
 			double x_pos1 = Double.parseDouble(leftLinkss.getElementsByTagName("x_pos").item(0).getTextContent());
 			double y_pos1 = Double.parseDouble(leftLinkss.getElementsByTagName("y_pos").item(0).getTextContent());
-			Location leftCoor = new Location(x_pos1, y_pos1);
+			double alt1 = Double.parseDouble(leftLinkss.getElementsByTagName("altitude").item(0).getTextContent());
+			Location leftCoor = new Location(x_pos1, y_pos1, alt1);
 			
 			NodeList rightLinksList = linkElement.getElementsByTagName("right");
 			Node rightLinks = rightLinksList.item(0);
 			Element rightLinkss = (Element)rightLinks;
 			double x_pos2 = Double.parseDouble(rightLinkss.getElementsByTagName("x_pos").item(0).getTextContent());
 			double y_pos2 = Double.parseDouble(rightLinkss.getElementsByTagName("y_pos").item(0).getTextContent());
-			Location rightCoor = new Location(x_pos2, y_pos2);
+			double alt2 = Double.parseDouble(rightLinkss.getElementsByTagName("altitude").item(0).getTextContent());
+			Location rightCoor = new Location(x_pos2, y_pos2, alt2);
 			
 			double left_lat = Double.parseDouble(linkElement.getElementsByTagName("left_latency").item(0).getTextContent());
 			double right_lat = Double.parseDouble(linkElement.getElementsByTagName("right_latency").item(0).getTextContent());
@@ -190,9 +191,9 @@ public class EdgeServerManager {
 	
 	/**
 	 * 
-	 * @param brockerId
+	 * @param brokerID
 	 */
-	public void createVmList(int brockerId){
+	public void createVmList(int brokerID){
 		int hostCounter=0;
 		int vmCounter=0;
 		
@@ -201,23 +202,23 @@ public class EdgeServerManager {
 		//Create VMs for each hosts
 		Document doc = SimSettings.getInstance().getEdgeDevicesDocument();
 		NodeList datacenterList = doc.getElementsByTagName("datacenter");
-		for (int i = 0; i < datacenterList.getLength(); i++) {
-			Node datacenterNode = datacenterList.item(i);
+		for (int dataCenterIdx = 0; dataCenterIdx < datacenterList.getLength(); dataCenterIdx++) {
+			Node datacenterNode = datacenterList.item(dataCenterIdx);
 			Element datacenterElement = (Element) datacenterNode;
 			String arch = datacenterElement.getAttribute("arch");
 			NodeList hostNodeList = datacenterElement.getElementsByTagName("host");
 			
 			Element location = (Element)datacenterElement.getElementsByTagName("location").item(0); // shaik added
 			
-			for (int j = 0; j < hostNodeList.getLength(); j++) {
+			for (int hostNodeIdx = 0; hostNodeIdx < hostNodeList.getLength(); hostNodeIdx++) {
 				
 				vmList.add(hostCounter, new ArrayList<EdgeVM>());
 				
-				Node hostNode = hostNodeList.item(j);
+				Node hostNode = hostNodeList.item(hostNodeIdx);
 				Element hostElement = (Element) hostNode;
 				NodeList vmNodeList = hostElement.getElementsByTagName("VM");
-				for (int k = 0; k < vmNodeList.getLength(); k++) {
-					Node vmNode = vmNodeList.item(k);					
+				for (int vmNodeIdx = 0; vmNodeIdx < vmNodeList.getLength(); vmNodeIdx++) {
+					Node vmNode = vmNodeList.item(vmNodeIdx);					
 					Element vmElement = (Element) vmNode;
 
 					String vmm = vmElement.getAttribute("vmm");
@@ -230,7 +231,7 @@ public class EdgeServerManager {
 					long bandwidth = Long.parseLong(location.getElementsByTagName("bandwidth").item(0).getTextContent()); // shaik added
 					
 					//VM Parameters		
-					EdgeVM vm = new EdgeVM(vmCounter, brockerId, mips, numOfCores, (int) ram, bandwidth, storage, vmm, new CloudletSchedulerTimeShared());
+					EdgeVM vm = new EdgeVM(vmCounter, brokerID, mips, numOfCores, (int) ram, bandwidth, storage, vmm, new CloudletSchedulerTimeShared());
 					vm.setVmType(SimSettings.VM_TYPES.EDGE_VM);
 					vm.setArch(arch);
 					vmList.get(hostCounter).add(vm);
@@ -264,11 +265,11 @@ public class EdgeServerManager {
 		double vmCounter = 0;
 		
 		// for each datacenter...
-		for(int i= 0; i<localDatacenters.size(); i++) {
-			List<? extends Host> list = localDatacenters.get(i).getHostList();
+		for(int localDataCenterIdx= 0; localDataCenterIdx<localDatacenters.size(); localDataCenterIdx++) {
+			List<? extends Host> localDataCenterHosts = localDatacenters.get(localDataCenterIdx).getHostList();
 			// for each host...
-			for (int j=0; j < list.size(); j++) {
-				Host host = list.get(j);
+			for (int localHostIdx=0; localHostIdx < localDataCenterHosts.size(); localHostIdx++) {
+				Host host = localDataCenterHosts.get(localHostIdx);
 				List<EdgeVM> vmArray = SimManager.getInstance().getLocalServerManager().getVmList(host.getId());
 				//for each vm...
 				for(int vmIndex=0; vmIndex<vmArray.size(); vmIndex++){
@@ -343,6 +344,7 @@ public class EdgeServerManager {
 		int wlan_id = Integer.parseInt(location.getElementsByTagName("wlan_id").item(0).getTextContent());
 		double x_pos = Double.parseDouble(location.getElementsByTagName("x_pos").item(0).getTextContent());
 		double y_pos = Double.parseDouble(location.getElementsByTagName("y_pos").item(0).getTextContent());
+		double altitude = Double.parseDouble(location.getElementsByTagName("altitude").item(0).getTextContent());
 		int level =Integer.parseInt(location.getElementsByTagName("level").item(0).getTextContent());
 		boolean wap = Boolean.parseBoolean(location.getElementsByTagName("wap").item(0).getTextContent());
 		boolean moving = Boolean.parseBoolean(location.getElementsByTagName("moving").item(0).getTextContent());
@@ -382,11 +384,11 @@ public class EdgeServerManager {
 			NodeSim newNode;
 			if(moving)
 			{
-				newNode = new NodeSim(x_pos, y_pos, level, wlan_id, wap, moving, new Location(dx, dy));
+				newNode = new NodeSim(x_pos, y_pos, altitude, level, wlan_id, wap, moving, new Location(dx, dy));
 			}
 			else 
 			{
-				newNode = new NodeSim(x_pos, y_pos, level, wlan_id, wap);
+				newNode = new NodeSim(x_pos, y_pos, altitude, level, wlan_id, wap);
 			}
 			newNode.getLocation().setBW(bw);
 			nodesForTopography.add(newNode);
@@ -403,7 +405,7 @@ public class EdgeServerManager {
 					costPerBW,
 					costPerSec
 				);
-			Location loc = new Location(wlan_id, x_pos, y_pos);
+			Location loc = new Location(wlan_id, x_pos, y_pos, altitude);
 			loc.setBW(bw);
 			host.setPlace(loc);
 			host.setLevel(level);
@@ -429,7 +431,7 @@ public class EdgeServerManager {
 		ArrayList<EdgeHost> hosts;
 		Puddle puddle;
 		
-		double x, y;		
+		double x, y, a;		
 		double staticLatency = Double.MAX_VALUE;
 		
 		//Create Puddles
@@ -454,9 +456,10 @@ public class EdgeServerManager {
 				System.out.print("\nFog level: "+cluster.getLevel()+" Puddle Id: "+i+" Hosts: ");
 				hosts = new ArrayList<EdgeHost>();
 				for (int j = 0; j < cluster.getCluster()[i].length; j++) {//for each host in the puddle
-					x = cluster.getCluster()[i][j][0];
-					y = cluster.getCluster()[i][j][1];
-					host = findHostByLoc(x, y);
+					x = cluster.getCluster()[i][j][LONGITUDE_INDEX];
+					y = cluster.getCluster()[i][j][LATITUDE_INDEX];
+					a = cluster.getCluster()[i][j][ALTITUDE_INDEX];
+					host = findHostByLoc(x, y, a);
 					if (host != null) {
 						host.setPuddleId(i);
 						hosts.add(host);
@@ -467,11 +470,6 @@ public class EdgeServerManager {
 				puddle.setMembers(hosts);
 				puddle.chooseNewHead();
 				
-				//Assign Parent relationships among Puddles belonging to adjacent fog layers.
-				puddle.setParentPuddleId(clusters.parentCluster[k][i]);
-				
-				//Assign parent and children host nodes from connected parent/child puddles
-				puddle.setNodeParentAndChildern();
 				
 				//Track resources in Puddles
 				puddle.updateResources();
@@ -492,20 +490,32 @@ public class EdgeServerManager {
 		//Assign Child relationships among Puddles belonging to adjacent fog layers.
 		for (int k=0; k<puddles.length; k++) {
 			for (int i=0; i<puddles[k].length; i++) {
-
+				//assign puddle as the current puddle being modified.
+				puddle = puddles[k][i];
+				
 				// Skip cloud, as it belongs to highest fog layer and does not have a parent.
-				if (puddles[k][i].getLevel() == 7)
+				if (puddle.getLevel() == MAX_HAFA_LEVEL)
 					continue;
 				
 				// for each puddle, get its parent info
-				int childPudId = puddles[k][i].getPuddleId();
-				int parentPudId = puddles[k][i].getParentPuddleId();
-				int childLayer = puddles[k][i].getLevel();
+				int childPudId = puddle.getPuddleId();
+				int parentPudId = clusters.parentCluster[k][i];
+				int childLayer = puddle.getLevel();
 				
-				System.out.println("Fog level: "+(childLayer+1)+" Parent Puddle Id: "+parentPudId);
+				//Assign Parent relationships among Puddles belonging to adjacent fog layers.
+				puddle.setParentPuddleId(parentPudId);
+				
 				// add itself to the list of children of that parent
 				findPuddleById(childLayer+1, parentPudId).getChildPuddleIds().add(childPudId);
-
+				
+				// add parent reference and add itself to parent.
+				puddle.setUp(findPuddleById(childLayer+1, parentPudId));
+				
+				//Assign parent and children host nodes from connected parent/child puddles
+				puddle.setNodeParentAndChildern();
+				
+				System.out.println("Fog level: "+(childLayer+1)+" Parent Puddle Id: "+parentPudId);
+				
 			}// end for i
 		}// end for k		
 		
@@ -584,7 +594,7 @@ public class EdgeServerManager {
 			parentLevel = pud.getLevel()+1;
 
 			//Note: HAFA organization should be a single-rooted tree, not a forest.
-			if (parentLevel > 7) {
+			if (parentLevel > MAX_HAFA_LEVEL) {
 				System.out.println("Done.");
 				//System.out.println("Error. Invalid fog level for parent.");
 				return cousinHosts;
@@ -708,7 +718,8 @@ public class EdgeServerManager {
 		}
 		
 		//System.out.print("Fog level: "+fLevel+" hostList count: "+hostList.size());
-		DistRadix sort = new DistRadix(hostList, loc);//use radix sort based on distance from task
+		//DistRadix sort = new DistRadix(hostList, loc);//use radix sort based on distance from task
+		BinaryHeap sort = new BinaryHeap(hostList.size(), loc, hostList);
 		LinkedList<EdgeHost> nodes = sort.sortNodes();
 		//System.out.print("nodes size: " + nodes.size() + "  Device Id: " + mobile.getId() + "  WAP Id: " + mobile.getLocation().getServingWlanId());
 		nearest = nodes.poll();
@@ -726,13 +737,16 @@ public class EdgeServerManager {
 	 * @param double2
 	 * @return
 	 */
-	public EdgeHost findHostByLoc(Double double1, Double double2) {
+	public EdgeHost findHostByLoc(Double x, Double y, Double z) {
+		Location match = new Location(x,y,z);
+
 		for (Datacenter node : SimManager.getInstance().getLocalServerManager().getDatacenterList()) {
-			if (((EdgeHost) node.getHostList().get(0)).getLocation().getXPos() == double1 && ((EdgeHost) node.getHostList().get(0)).getLocation().getYPos() == double2) {
+			
+			if (((EdgeHost) node.getHostList().get(0)).getLocation().equals(match)) {
 				return ((EdgeHost) node.getHostList().get(0));
 			}
 		}
-		return findMovingHost(double1, double2);
+		return findMovingHost(x, y, z);
 	}
 	
 	
@@ -742,9 +756,13 @@ public class EdgeServerManager {
 	 * @param double2
 	 * @return
 	 */
-	public EdgeHost findMovingHost(Double double1, Double double2) {
+	public EdgeHost findMovingHost(Double x, Double y, Double z) {
+		Location match = new Location(x,y,z);
+
 		for (EdgeHost node : hostList) {
-			if(node.getLocation().getXPos() == double1 && node.getLocation().getYPos() == double2) {
+			
+			if(node.getLocation().equals(match)) {
+				
 				return node;
 			}
 		}
@@ -776,8 +794,10 @@ public class EdgeServerManager {
 	 *	@return
 	 */
 	public EdgeHost findHostByWlanId(int id) {
+		
 		for (Datacenter node: SimManager.getInstance().getLocalServerManager().getDatacenterList()) {
 			EdgeHost host = (EdgeHost) node.getHostList().get(0);
+			
 			if (host.getLocation().getServingWlanId()== id) {
 				return host;
 			}

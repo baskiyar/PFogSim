@@ -13,11 +13,7 @@
 package edu.boun.edgecloudsim.core;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-
 import org.cloudbus.cloudsim.Datacenter;
 //import org.cloudbus.cloudsim.Datacenter;
 import org.cloudbus.cloudsim.Log;
@@ -32,26 +28,15 @@ import edu.boun.edgecloudsim.edge_server.EdgeServerManager;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
 //import edu.boun.edgecloudsim.edge_server.EdgeVM;
 import edu.boun.edgecloudsim.edge_server.VmAllocationPolicy_Custom;
-import edu.auburn.pFogSim.Puddle.Puddle;
-//import edu.auburn.pFogSim.Puddle.Puddle;
-import edu.auburn.pFogSim.Voronoi.src.kn.uni.voronoitreemap.diagram.PowerDiagram;
-//import edu.auburn.pFogSim.clustering.FogCluster;
-import edu.auburn.pFogSim.clustering.FogHierCluster;
-import edu.auburn.pFogSim.netsim.Link;
 import edu.auburn.pFogSim.netsim.NetworkTopology;
-import edu.auburn.pFogSim.netsim.NodeSim;
 import edu.auburn.pFogSim.util.MobileDevice;
-//import edu.auburn.pFogSim.netsim.Router;
-import edu.auburn.pFogSim.netsim.ESBModel;
 import edu.boun.edgecloudsim.edge_client.MobileDeviceManager;
 import edu.boun.edgecloudsim.edge_client.Task;
 import edu.auburn.pFogSim.mobility.MobilityModel;
 import edu.boun.edgecloudsim.task_generator.LoadGeneratorModel;
 import edu.boun.edgecloudsim.network.NetworkModel;
 import edu.boun.edgecloudsim.utils.EdgeTask;
-import edu.boun.edgecloudsim.utils.Location;
 import edu.boun.edgecloudsim.utils.SimLogger;
-import javafx.util.Pair;
 
 
 /**
@@ -79,7 +64,6 @@ public class SimManager extends SimEntity {
 	private LoadGeneratorModel loadGeneratorModel;
 	private MobileDeviceManager mobileDeviceManager;
 	private NetworkTopology networkTopology;
-	private ArrayList<PowerDiagram> voronoiDiagramList = new ArrayList<PowerDiagram>();
 	private int[] wapIdList = new int [numOfMobileDevice];
 
 	private static SimManager instance = null;
@@ -166,27 +150,7 @@ public class SimManager extends SimEntity {
 	}
 	
 	
-	/**
-	 * 
-	 * @param diagram
-	 */
-	public void addToVoronoiDiagramList(PowerDiagram diagram)
-	{
-		this.voronoiDiagramList.add(diagram);
-	}
-	
-	
-	/**
-	 * 
-	 * @param level
-	 * @return
-	 */
-	public PowerDiagram getVoronoiDiagramAtLevel(int level)
-	{
-		if(level < voronoiDiagramList.size())
-			return voronoiDiagramList.get(level);
-		return null;
-	}
+
 	
 	
 	/**
@@ -277,7 +241,6 @@ public class SimManager extends SimEntity {
 		}
 		
 		//Get all of the initial wireless access points ids for all the mobile devices
-		//SimLogger.printLine("treeMap.size() = " + mobilityModel.getSize());
 
 		for(int i = 0; i < mobilityModel.getSize(); i++)
 		{
@@ -302,7 +265,6 @@ public class SimManager extends SimEntity {
 		synchronized(this){
 			switch (ev.getTag()) {
 			case CREATE_TASK:
-				//SimLogger.printLine("CREATE_TASK reached");
 				try {
 					EdgeTask edgeTask = (EdgeTask) ev.getData();
 					mobileDeviceManager.submitTask(edgeTask);						
@@ -335,7 +297,7 @@ public class SimManager extends SimEntity {
 				SimLogger.getInstance().addVmUtilizationLog(CloudSim.clock(),edgeServerManager.getAvgUtilization());
 				// for each fog node - capture current utilization - Shaik added
 				for (Datacenter node : SimManager.getInstance().getLocalServerManager().getDatacenterList()) {
-					SimLogger.getInstance().addFNMipsUtilizationLog(CloudSim.clock(), ((EdgeHost) node.getHostList().get(0)).getId(), ((EdgeHost)node.getHostList().get(0)).getLevel(), ((EdgeHost)node.getHostList().get(0)).getFnMipsUtilization() * 100); // Shaik added *100 - to report 100 times of current utlization, as node mips utilization is limited to 1% for our test environment.
+					SimLogger.getInstance().addFNMipsUtilizationLog(CloudSim.clock(), ((EdgeHost) node.getHostList().get(0)).getId(), ((EdgeHost)node.getHostList().get(0)).getLevel(), ((EdgeHost)node.getHostList().get(0)).getFnMipsUtilization()); // Shaik added *100 - to report 100 times of current utlization, as node mips utilization is limited to 1% for our test environment.// Harmon removed after logging >100% utilization.
 					SimLogger.getInstance().addFNNwUtilizationLog(CloudSim.clock(), ((EdgeHost) node.getHostList().get(0)).getId(), ((EdgeHost)node.getHostList().get(0)).getLevel(), ((EdgeHost)node.getHostList().get(0)).getFnNwUtilization());
 				}	
 				schedule(getId(), SimSettings.getInstance().getVmLoadLogInterval(), GET_LOAD_LOG);
@@ -446,14 +408,6 @@ public class SimManager extends SimEntity {
 	}
 
 	
-	/**
-	 * 
-	 * @return
-	 */
-	public ArrayList<PowerDiagram> getVoronoiDiagram() {
-		// TODO Auto-generated method stub
-		return this.voronoiDiagramList;
-	}
 
 		
 	/**
@@ -488,20 +442,7 @@ public class SimManager extends SimEntity {
 	}
 
 	
-	/**
-	 * @return the voronoiDiagramList
-	 */
-	public ArrayList<PowerDiagram> getVoronoiDiagramList() {
-		return voronoiDiagramList;
-	}
 
-	
-	/**
-	 * @param voronoiDiagramList the voronoiDiagramList to set
-	 */
-	public void setVoronoiDiagramList(ArrayList<PowerDiagram> voronoiDiagramList) {
-		this.voronoiDiagramList = voronoiDiagramList;
-	}
 
 	
 	/**

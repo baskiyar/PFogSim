@@ -15,12 +15,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.cloudbus.cloudsim.Datacenter;
-import org.cloudbus.cloudsim.Vm;
-import org.cloudbus.cloudsim.core.CloudSim;
-
-import edu.auburn.pFogSim.Radix.DistRadix;
 import edu.auburn.pFogSim.netsim.ESBModel;
-import edu.auburn.pFogSim.netsim.NetworkTopology;
 import edu.auburn.pFogSim.netsim.NodeSim;
 import edu.auburn.pFogSim.util.MobileDevice;
 import edu.boun.edgecloudsim.core.SimManager;
@@ -29,7 +24,6 @@ import edu.boun.edgecloudsim.edge_orchestrator.EdgeOrchestrator;
 import edu.boun.edgecloudsim.edge_server.EdgeHost;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
 import edu.boun.edgecloudsim.utils.Location;
-import edu.boun.edgecloudsim.utils.SimLogger;
 
 
 /**
@@ -39,6 +33,9 @@ import edu.boun.edgecloudsim.utils.SimLogger;
  */
 public class CentralOrchestrator extends EdgeOrchestrator {
 	
+	private static final int BITS_PER_BYTE = 8;
+	private static final int MESSAGES_PER_HOST = 2;
+	private static final int BYTES_PER_KB = 1024;
 	ArrayList<EdgeHost> hosts;
 	HashMap<NodeSim,HashMap<NodeSim, LinkedList<NodeSim>>> pathTable;
 	Location hostLoc;
@@ -81,7 +78,7 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 		}
 		
 		this.avgNumProspectiveHosts = hosts.size();
-		this.avgNumMessages = this.avgNumProspectiveHosts * 2; // For each service request (i.e. per device), each host receives resource availability request & sends response.
+		this.avgNumMessages = this.avgNumProspectiveHosts * MESSAGES_PER_HOST; // For each service request (i.e. per device), each host receives resource availability request & sends response.
 				
 	}
 
@@ -130,14 +127,13 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 	 * @ author Qian Wang
 	 * @ author Shehenaz Shaik 
 	 * (non-Javadoc)
-	 * @see edu.boun.edgecloudsim.edge_orchestrator.EdgeOrchestrator#assignHost(edu.auburn.pFogSim.util.MobileDevice)
 	 */
 	@Override
 	public void assignHost(MobileDevice mobile) {
 		// Find the total cost of execution at each prospective fog node
 		// cost of execution and cost of data transfer depends on the type of application accessed from mobile device
 		Map<Double, List<NodeSim>> costMap = new HashMap<>();
-		NodeSim src = ((ESBModel)SimManager.getInstance().getNetworkModel()).getNetworkTopology().findNode(mobile.getLocation().getXPos(),mobile.getLocation().getYPos(), false);
+		NodeSim src = ((ESBModel)SimManager.getInstance().getNetworkModel()).getNetworkTopology().findNode(mobile.getLocation().getXPos(),mobile.getLocation().getYPos(), mobile.getLocation().getAltitude(), false);
 		//System.out.println("assignHost: mobile device location: "+mobile.getLocation().getXPos()+"  "+mobile.getLocation().getYPos()+"  "+mobile.getLocation().getServingWlanId());
 		//System.out.println("initialize: host location: "+hostLoc.getXPos()+"  "+hostLoc.getYPos());
 		//System.out.println("NodeSim src WLANId: "+ src.getWlanId() + "This should match id from above line.");
@@ -149,10 +145,10 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 			NodeSim des = entry.getKey();
 			LinkedList<NodeSim> path = entry.getValue();
 			if (path == null || path.size() == 0) {
-				EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(mobile.getLocation().getXPos(), mobile.getLocation().getYPos());
-				double bwCost = (mobile.getBWRequirement()*8 / (double)1024) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
+				EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(mobile.getLocation().getXPos(), mobile.getLocation().getYPos(), mobile.getLocation().getAltitude());
+				double bwCost = (mobile.getBWRequirement()*BITS_PER_BYTE / BYTES_PER_KB) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
 				//double exCost = (double)mobile.getTaskLengthRequirement() / k.getTotalMips() * k.getCostPerSec(); 
-				double exCost = (double)mobile.getTaskLengthRequirement() / (k.getPeList().get(0).getMips()) * k.getCostPerSec(); // Shaik modified - May 07, 2019.
+				double exCost = mobile.getTaskLengthRequirement() / (k.getPeList().get(0).getMips()) * k.getCostPerSec(); // Shaik modified - May 07, 2019.
 				
 				cost = cost + bwCost;
 				//SimLogger.getInstance().getCentralizeLogPrinter().println("Level:\t" + des.getLevel() + "\tNode:\t" + des.getWlanId() + "\tBWCost:\t" + bwCost + "\tTotalBWCost:\t" + cost);
@@ -164,16 +160,16 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 			else {
 				//SimLogger.getInstance().getCentralizeLogPrinter().println("**********Path From " + src.getWlanId() + " To " + des.getWlanId() + "**********");
 				for (NodeSim node: path) {
-					EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(node.getLocation().getXPos(), node.getLocation().getYPos());
-					double bwCost = (mobile.getBWRequirement()*8 / (double)1024) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
+					EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(node.getLocation().getXPos(), node.getLocation().getYPos(), node.getLocation().getAltitude());
+					double bwCost = (mobile.getBWRequirement()*BITS_PER_BYTE / BYTES_PER_KB) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
 					//double bwCost = mobile.getBWRequirement() * k.getCostPerBW();
 					cost = cost + bwCost;
 					//SimLogger.getInstance().getCentralizeLogPrinter().println("Level:\t" + node.getLevel() + "\tNode:\t" + node.getWlanId() + "\tBWCost:\t" + bwCost + "\tTotalBWCost:\t" + cost);
 					//SimLogger.getInstance().getCentralizeLogPrinter().println("Total data:\t" + mobile.getBWRequirement() + "\tBWCostPerSec:\t" + k.getCostPerBW());
 				}				
-				EdgeHost desHost = SimManager.getInstance().getLocalServerManager().findHostByLoc(des.getLocation().getXPos(), des.getLocation().getYPos());
+				EdgeHost desHost = SimManager.getInstance().getLocalServerManager().findHostByLoc(des.getLocation().getXPos(), des.getLocation().getYPos(), des.getLocation().getAltitude());
 				//double exCost = desHost.getCostPerSec() * ((double)mobile.getTaskLengthRequirement() / desHost.getTotalMips());
-				double exCost = (double)mobile.getTaskLengthRequirement() / (desHost.getPeList().get(0).getMips()) * desHost.getCostPerSec(); // Shaik modified - May 07, 2019.
+				double exCost = mobile.getTaskLengthRequirement() / (desHost.getPeList().get(0).getMips()) * desHost.getCostPerSec(); // Shaik modified - May 07, 2019.
 
 				cost = cost + exCost;
 				//SimLogger.getInstance().getCentralizeLogPrinter().println("Destination:\t"+ des.getWlanId() + "\tExecuteCost:\t" + exCost + "\tTotalCost:\t" + cost);
@@ -204,7 +200,7 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 		for (Double totalCost : costList) {
 			// Get the list of prospective nodes available at that cost
 			for(NodeSim desNode: costMap.get(totalCost)) {
-				host = SimManager.getInstance().getLocalServerManager().findHostByLoc(desNode.getLocation().getXPos(), desNode.getLocation().getYPos());
+				host = SimManager.getInstance().getLocalServerManager().findHostByLoc(desNode.getLocation().getXPos(), desNode.getLocation().getYPos(), desNode.getLocation().getAltitude());
 				hostsSortedByCost.add(host);
 				//System.out.println("Hosts in sorted order of costs:  "+host.getId()+"  at cost:  "+totalCost);
 			}
@@ -279,7 +275,7 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 	 * @return
 	 */
 	public double getAvgNumProspectiveHosts() {
-		return ((double)this.avgNumProspectiveHosts);		
+		return (this.avgNumProspectiveHosts);		
 	}
 		
 
@@ -296,7 +292,7 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 	 * @return
 	 */
 	public double getAvgNumMessages() {
-		return ((double)this.avgNumMessages);		
+		return (this.avgNumMessages);		
 	}
 		
 	
@@ -314,7 +310,7 @@ public class CentralOrchestrator extends EdgeOrchestrator {
 	 * @return
 	 */
 	public double getAvgNumPuddlesSearched() {
-		return ((double)0);		
+		return (0);		
 	}
 	
 }

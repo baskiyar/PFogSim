@@ -1,13 +1,11 @@
 package edu.auburn.pFogSim.clustering;
 
-//import edu.boun.edgecloudsim.utils.*;
-import javafx.util.Pair;
-
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 
 import edu.auburn.pFogSim.netsim.*;
+import edu.auburn.pFogSim.util.DataInterpreter;
 import edu.boun.edgecloudsim.utils.Location;
 
 
@@ -17,6 +15,7 @@ import edu.boun.edgecloudsim.utils.Location;
  *
  */
 public class FogHierCluster {
+	private static final int MAX_FOG_LAYERS = 7;
 	private ArrayList<FogCluster> clusterList = new ArrayList<FogCluster>();
 	public int[][] parentCluster;
 	
@@ -29,13 +28,13 @@ public class FogHierCluster {
 		
 		HashMap<Integer, ArrayList<Location>> levelMap = new HashMap<Integer, ArrayList<Location>>();
 		int level = 1000;
-		double x_pos = -1.0, y_pos = -1.0;
+		double x_pos = -1.0, y_pos = -1.0, a_pos = -1.0;
 		int[] clusterCount = {100, 40, 20, 10, 3, 1, 1}; // Shaik added - number of clusters to be created in a given layer.
 		double[] maxLatency = {2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0}; // Shaik added - max latency between any two nodes in a given layer is 2 msec.
 		double[] maxDistance = {200, 500, 750, 1250, 1000, 3000, 4000}; // Shaik added - max distance between any two nodes in a given layer is 2 msec.
 		
 		ArrayList<Location> newList = new ArrayList<>();
-		for(int r = 1; r <= 7; r++)
+		for(int r = 1; r <= MAX_FOG_LAYERS; r++)
 			levelMap.put(r, new ArrayList<Location>()); 
 		//Add all nodes to levelMap based on their level values
 		for(NodeSim node : nodes)
@@ -43,7 +42,9 @@ public class FogHierCluster {
 			level = node.getLevel();
 			x_pos = node.getLocation().getXPos();
 			y_pos = node.getLocation().getYPos();
-			Location pair = new Location(x_pos, y_pos);
+			a_pos = node.getLocation().getAltitude();
+			
+			Location pair = new Location(x_pos, y_pos, a_pos);
 			if (levelMap.containsKey(level)) {
 				levelMap.get(level).add(pair);
 			}
@@ -55,7 +56,7 @@ public class FogHierCluster {
 		}
 
 		//Create clusters of nodes at each fog layer & save the configuration in clusterList
-		for(int levelIter = 1; levelIter <= 7; levelIter++)
+		for(int levelIter = 1; levelIter <= MAX_FOG_LAYERS; levelIter++)
 		{
 			//FogCluster fc = new FogCluster(levelMap.get(levelIter), levelIter, clusterCount[levelIter-1]); // Create specified number of clusters in each layer.
 			//FogCluster fc = new FogCluster(levelMap.get(levelIter), levelIter, maxLatency[levelIter-1]); // Clusters defined by maximum latency among members of each cluster.
@@ -123,16 +124,18 @@ public class FogHierCluster {
 							// Get point coordinates
 							double x1 = clusterSet3[cLower][cLoweri][0];
 							double y1 = clusterSet3[cLower][cLoweri][1];
-							
+							double a1 = clusterSet3[cLower][cLoweri][2];
 							
 							//To each point of 'cUpper' cluster
 							for (int cUpperj=0; cUpperj<clusterSet4[cUpper].length; cUpperj++){
 								// Get point coordinates
 								double x2 = clusterSet4[cUpper][cUpperj][0];
 								double y2 = clusterSet4[cUpper][cUpperj][1];
+								double a2 = clusterSet4[cUpper][cUpperj][2];
 														
 								//find the distance
-								distance = Math.sqrt(((x2-x1)*(x2-x1)) + ((y2-y1)*(y2-y1)));
+								//distance = Math.sqrt(((x2-x1)*(x2-x1)) + ((y2-y1)*(y2-y1)));
+								distance = DataInterpreter.measure(x1, y1, a1, x2,y2,a2);
 								//System.out.println(distance);
 								
 								// Save the maximum distance
@@ -421,7 +424,7 @@ public class FogHierCluster {
 		
 
 		
-		SimLogger.printLine("No issues so far...");
+
 		
 	}// End main
 */
@@ -444,6 +447,7 @@ public class FogHierCluster {
 						writer.println("<location>");
 						writer.println("<x_pos>" + cluster[j][k][0] + "</x_pos>");
 						writer.println("<y_pos>" + cluster[j][k][1] + "</y_pos>");
+						writer.println("<altitude>" + cluster[j][k][2] + "</altitude>");
 						writer.println("</location>");
 					}
 					writer.println("</cluster"+ j + ">");

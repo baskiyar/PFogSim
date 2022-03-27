@@ -18,6 +18,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.Random;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -38,6 +39,11 @@ import edu.boun.edgecloudsim.utils.SimLogger;
  *
  */
 public class SimSettings {
+	private static final int BASE_DEVICE_ID = 3000000;   // Shaik modified - prior value 3000
+	private static final int BASE_ORCHESTRATOR_ID = 2000000;  // Shaik modified - prior value 2000
+	private static final int BASE_DATACENTER_ID = 1000000; // Shaik modified - prior value 1000
+	private static final int BITS_PER_KILOBIT = 1000;
+	private static final int SECONDS_PER_MINUTE = 60;
 	private static SimSettings instance = null;
 	private Document edgeDevicesDoc = null;
 	private Document linksDoc = null;
@@ -45,25 +51,25 @@ public class SimSettings {
 	//enumerations for the VM, application, and place.
 	//if you want to add different types on your config file,
 	//you may modify current types or add new types here. 
-	public static enum VM_TYPES { EDGE_VM, CLOUD_VM }
-	public static enum APP_TYPES { AUGMENTED_REALITY, HEALTH_APP, HEAVY_COMP_APP, INFOTAINMENT_APP, COGNITIVE_ASSISTANCE, REMOTE_HEALTHCARE, MACHINE_LEARNING }
-	public static enum PLACE_TYPES { ATTRACTIVENESS_L1, ATTRACTIVENESS_L2, ATTRACTIVENESS_L3 }
-	public static enum CLOUD_TRANSFER { IGNORE, CLOUD_UPLOAD, CLOUD_DOWNLOAD }
+	public enum VM_TYPES { EDGE_VM, CLOUD_VM }
+	public enum APP_TYPES { AUGMENTED_REALITY, HEALTH_APP, HEAVY_COMP_APP, INFOTAINMENT_APP, COGNITIVE_ASSISTANCE, REMOTE_HEALTHCARE, MACHINE_LEARNING }
+	public enum PLACE_TYPES { ATTRACTIVENESS_L1, ATTRACTIVENESS_L2, ATTRACTIVENESS_L3 }
+	public enum CLOUD_TRANSFER { IGNORE, CLOUD_UPLOAD, CLOUD_DOWNLOAD }
 	
 	//predifined IDs for cloud components.
-	public static int CLOUD_DATACENTER_ID = 1000000; // Shaik modified - prior value 1000
+	public static int CLOUD_DATACENTER_ID = BASE_DATACENTER_ID;
 	public static int CLOUD_HOST_ID = CLOUD_DATACENTER_ID + 1;
 	public static int CLOUD_VM_ID = CLOUD_DATACENTER_ID + 2;
 	
 	//predifined IDs for edge devices
-	public static int EDGE_ORCHESTRATOR_ID = 2000000;  // Shaik modified - prior value 2000
+	public static int EDGE_ORCHESTRATOR_ID = BASE_ORCHESTRATOR_ID;
 	public static int GENERIC_EDGE_DEVICE_ID = EDGE_ORCHESTRATOR_ID + 1;
 	
 	//generic ID for mobile device
-	public static int MOBILE_DEVICE_ID = 3000000;   // Shaik modified - prior value 3000
+	public static int MOBILE_DEVICE_ID = BASE_DEVICE_ID;
 
-	public static double ROUTER_PROCESSING_DELAY = 0.020; // Assumed 20 millisec constant delay per network hop - modify as appropriate for other test environments.
-	public static double MAX_NODE_MIPS_UTIL_ALLOWED = 1.0; // Maximum allowed node mips utilization before the requests spill over to a different fog node.
+	public static final double ROUTER_PROCESSING_DELAY = 0.020; // Assumed 20 millisec constant delay per network hop - modify as appropriate for other test environments.
+	public static final double MAX_NODE_MIPS_UTIL_ALLOWED = 1.0; // Maximum allowed node mips utilization before the requests spill over to a different fog node.
 	
 	//delimiter for output file.
 	public static String DELIMITER = ";";
@@ -100,7 +106,59 @@ public class SimSettings {
 
     private int MIPS_FOR_CLOUD; //MIPS
     
-    //Qian selected nodes
+    private boolean MOVING_DEVICES; //Mobile devices should be moving?
+    private boolean PRODUCER_CONSUMER_SEP;// Should producer and consumer be same device?
+
+    //which level nodes are moving?
+    private boolean MOVING_CLOUD;
+    private boolean MOVING_CITY_HALL;
+    private boolean MOVING_UNIVERSITY;
+    private boolean MOVING_WARD;
+    private boolean MOVING_LIBRARY;
+    private boolean MOVING_COMMUNITY_CENTER;
+    private boolean MOVING_SCHOOL;
+    
+    private boolean ASSIGN_DEVICES_LAYER1; // Should mobile devices be assigned to layer 1 nodes at a 1:1 ratio?
+    
+    public boolean isMOVING_CLOUD() {
+		return MOVING_CLOUD;
+	}
+
+
+	public boolean isMOVING_CITY_HALL() {
+		return MOVING_CITY_HALL;
+	}
+
+
+	public boolean isMOVING_UNIVERSITY() {
+		return MOVING_UNIVERSITY;
+	}
+
+
+	public boolean isMOVING_WARD() {
+		return MOVING_WARD;
+	}
+
+
+	public boolean isMOVING_LIBRARY() {
+		return MOVING_LIBRARY;
+	}
+
+
+	public boolean isMOVING_COMMUNITY_CENTER() {
+		return MOVING_COMMUNITY_CENTER;
+	}
+
+
+	public boolean isMOVING_SCHOOL() {
+		return MOVING_SCHOOL;
+	}
+
+	public boolean getAssignDevicesLayer1() {
+		return ASSIGN_DEVICES_LAYER1;
+	}
+
+	//Qian selected nodes
     private String[] SELECTED_NODES;
     private int[] selectedHostIds; // Shaik added
 	private int currentSelection = 0;
@@ -131,10 +189,25 @@ public class SimSettings {
     // [08] required # of cores
     // [09] vm utilization (%)
     // [10] max latency (milliseconds)
-    private double[][] taskLookUpTable = new double[APP_TYPES.values().length][11];
+    public enum AppStat {
+    	USAGE_PERCENTAGE,
+    	CLOUD_SELECT_PROBABILITY,
+    	POISSON_MEAN,
+    	ACTIVE_PERIOD,
+    	IDLE_PERIOD,
+    	AVG_DATA_UPLOAD,
+    	AVG_DATA_DOWNLOAD,
+    	AVG_TASK_LENGTH,
+    	CORES_REQUIRED,
+    	VM_UTILIZATION,
+    	MAX_LATENCY
+    }
+    private double[][] taskLookUpTable = new double[APP_TYPES.values().length][12];
     private int MAX_LEVELS;
     private String inputType;
     private boolean mobileDevicesMoving;
+    
+    private int RANDOM_SEED;
     
     
     /**
@@ -171,24 +244,26 @@ public class SimSettings {
 			Properties prop = new Properties();
 			prop.load(input);
 
-			SIMULATION_TIME = (double)60 * Double.parseDouble(prop.getProperty("simulation_time")); //seconds
-			WARM_UP_PERIOD = (double)60 * Double.parseDouble(prop.getProperty("warm_up_period")); //seconds
-			INTERVAL_TO_GET_VM_LOAD_LOG = (double)60 * Double.parseDouble(prop.getProperty("vm_load_check_interval")); //seconds
-			INTERVAL_TO_GET_VM_LOCATION_LOG = (double)60 * Double.parseDouble(prop.getProperty("vm_location_check_interval")); //seconds
+			SIMULATION_TIME = SECONDS_PER_MINUTE * Double.parseDouble(prop.getProperty("simulation_time")); //seconds
+			WARM_UP_PERIOD = SECONDS_PER_MINUTE * Double.parseDouble(prop.getProperty("warm_up_period")); //seconds
+			INTERVAL_TO_GET_VM_LOAD_LOG = SECONDS_PER_MINUTE * Double.parseDouble(prop.getProperty("vm_load_check_interval")); //seconds
+			INTERVAL_TO_GET_VM_LOCATION_LOG = SECONDS_PER_MINUTE * Double.parseDouble(prop.getProperty("vm_location_check_interval")); //seconds
 			FILE_LOG_ENABLED = Boolean.parseBoolean(prop.getProperty("file_log_enabled"));
 			DEEP_FILE_LOG_ENABLED = Boolean.parseBoolean(prop.getProperty("deep_file_log_enabled"));
 			//Qian get trace enable property
 			TRACE_ENABLED = Boolean.parseBoolean(prop.getProperty("trace_enabled"));
+			ASSIGN_DEVICES_LAYER1 = Boolean.parseBoolean(prop.getProperty("assign_devices_layer1"));
 			
 			MIN_NUM_OF_MOBILE_DEVICES = Integer.parseInt(prop.getProperty("min_number_of_mobile_devices"));
 			MAX_NUM_OF_MOBILE_DEVICES = Integer.parseInt(prop.getProperty("max_number_of_mobile_devices"));
 			MOBILE_DEVICE_COUNTER_SIZE = Integer.parseInt(prop.getProperty("mobile_device_counter_size"));
+			MOVING_DEVICES = Boolean.parseBoolean(prop.getProperty("moving_devices"));
 			
 			WAN_PROPOGATION_DELAY = Double.parseDouble(prop.getProperty("wan_propogation_delay"));
 			LAN_INTERNAL_DELAY = Double.parseDouble(prop.getProperty("lan_internal_delay"));
-			BANDWITH_WLAN = 1000 * Integer.parseInt(prop.getProperty("wlan_bandwidth"));
-			BANDWITH_WAN = 1000 * Integer.parseInt(prop.getProperty("wan_bandwidth"));
-			BANDWITH_GSM =  1000 * Integer.parseInt(prop.getProperty("gsm_bandwidth"));
+			BANDWITH_WLAN = BITS_PER_KILOBIT * Integer.parseInt(prop.getProperty("wlan_bandwidth"));
+			BANDWITH_WAN = BITS_PER_KILOBIT * Integer.parseInt(prop.getProperty("wan_bandwidth"));
+			BANDWITH_GSM =  BITS_PER_KILOBIT * Integer.parseInt(prop.getProperty("gsm_bandwidth"));
 
 			//It is assumed that
 			//-Storage and RAM are unlimited in cloud
@@ -217,6 +292,25 @@ public class SimSettings {
 			
 			SIMULATION_SCENARIOS = prop.getProperty("simulation_scenarios").split(",");
 			
+			try{
+				RANDOM_SEED = Integer.parseInt(prop.getProperty("random_seed"));
+			}catch (Exception e) {
+				Random r = new Random();
+				RANDOM_SEED = r.nextInt();// TODO: handle exception
+			}
+			
+			PRODUCER_CONSUMER_SEP = Boolean.parseBoolean(prop.getProperty("Producer_Consumer_Separation"));
+			MOVING_CLOUD = Boolean.parseBoolean(prop.getProperty("moving_cloud"));
+			if (MOVING_CLOUD) {
+				System.out.println("------------------------------------");
+			}
+			MOVING_CITY_HALL = Boolean.parseBoolean(prop.getProperty("moving_city_hall"));
+			MOVING_UNIVERSITY = Boolean.parseBoolean(prop.getProperty("moving_university"));
+			MOVING_WARD = Boolean.parseBoolean(prop.getProperty("moving_ward"));
+			MOVING_LIBRARY = Boolean.parseBoolean(prop.getProperty("moving_library"));
+			MOVING_COMMUNITY_CENTER = Boolean.parseBoolean(prop.getProperty("moving_community_center"));
+			MOVING_SCHOOL = Boolean.parseBoolean(prop.getProperty("moving_school"));
+			
 			//avg waiting time in a place (min)
 			double place1_mean_waiting_time = Double.parseDouble(prop.getProperty("attractiveness_L1_mean_waiting_time"));
 			double place2_mean_waiting_time = Double.parseDouble(prop.getProperty("attractiveness_L2_mean_waiting_time"));
@@ -242,7 +336,7 @@ public class SimSettings {
 				}
 			}
 		}
-		parseApplicatinosXML(applicationsFile);
+		parseApplicationsXML(applicationsFile);
 		parseEdgeDevicesXML(edgeDevicesFile);
 		parseLinksXML(linksFile);
 		
@@ -416,6 +510,14 @@ public class SimSettings {
 	{
 		return MAX_NUM_OF_MOBILE_DEVICES;
 	}
+	
+	/**
+	 * 
+	 * @return Should low level fog nodes be mobile?
+	 */
+	public boolean getMovingDevices() {
+		return MOVING_DEVICES;
+	}
 
 	
 	/**
@@ -513,6 +615,12 @@ public class SimSettings {
 	}
 	
 	
+	public boolean getDeviceSeparation() {
+		return PRODUCER_CONSUMER_SEP;
+	}
+	
+	
+	
 	/**
 	 * 
 	 * @param element
@@ -547,7 +655,7 @@ public class SimSettings {
 	 * 
 	 * @param filePath
 	 */
-	private void parseApplicatinosXML(String filePath)
+	private void parseApplicationsXML(String filePath)
 	{
 		Document doc = null;
 		try {	
@@ -560,47 +668,29 @@ public class SimSettings {
 			NodeList appList = doc.getElementsByTagName("application");
 			for (int i = 0; i < appList.getLength(); i++) {
 				Node appNode = appList.item(i);
-	
 				Element appElement = (Element) appNode;
-				isAttribtuePresent(appElement, "name");
-				isElementPresent(appElement, "usage_percentage");
-				isElementPresent(appElement, "prob_cloud_selection");
-				isElementPresent(appElement, "poisson_interarrival");
-				isElementPresent(appElement, "active_period");
-				isElementPresent(appElement, "idle_period");
-				isElementPresent(appElement, "data_upload");
-				isElementPresent(appElement, "data_download");
-				isElementPresent(appElement, "task_length");
-				isElementPresent(appElement, "required_core");
-				isElementPresent(appElement, "vm_utilization");
-				isElementPresent(appElement, "delay_sensitivity");
-
-				String appName = appElement.getAttribute("name");
-				SimSettings.APP_TYPES appType = APP_TYPES.valueOf(appName);
-				double usage_percentage = Double.parseDouble(appElement.getElementsByTagName("usage_percentage").item(0).getTextContent());
-				double prob_cloud_selection = Double.parseDouble(appElement.getElementsByTagName("prob_cloud_selection").item(0).getTextContent());
-				double poisson_interarrival = Double.parseDouble(appElement.getElementsByTagName("poisson_interarrival").item(0).getTextContent());
-				double active_period = Double.parseDouble(appElement.getElementsByTagName("active_period").item(0).getTextContent());
-				double idle_period = Double.parseDouble(appElement.getElementsByTagName("idle_period").item(0).getTextContent());
-				double data_upload = Double.parseDouble(appElement.getElementsByTagName("data_upload").item(0).getTextContent());
-				double data_download = Double.parseDouble(appElement.getElementsByTagName("data_download").item(0).getTextContent());
-				double task_length = Double.parseDouble(appElement.getElementsByTagName("task_length").item(0).getTextContent());
-				double required_core = Double.parseDouble(appElement.getElementsByTagName("required_core").item(0).getTextContent());
-				double vm_utilization = Double.parseDouble(appElement.getElementsByTagName("vm_utilization").item(0).getTextContent());
-				double delay_sensitivity = Double.parseDouble(appElement.getElementsByTagName("delay_sensitivity").item(0).getTextContent());
 				
-			    taskLookUpTable[appType.ordinal()][0] = usage_percentage; //usage percentage [0-100]
-			    taskLookUpTable[appType.ordinal()][1] = prob_cloud_selection; //prob. of selecting cloud [0-100]
-			    taskLookUpTable[appType.ordinal()][2] = poisson_interarrival; //poisson mean (sec)
-			    taskLookUpTable[appType.ordinal()][3] = active_period; //active period (sec)
-			    taskLookUpTable[appType.ordinal()][4] = idle_period; //idle period (sec)
-			    taskLookUpTable[appType.ordinal()][5] = data_upload; //avg data upload (KB)
-			    taskLookUpTable[appType.ordinal()][6] = data_download; //avg data download (KB)
-			    taskLookUpTable[appType.ordinal()][7] = task_length; //avg task length (MI)
-			    taskLookUpTable[appType.ordinal()][8] = required_core; //required # of core
-			    taskLookUpTable[appType.ordinal()][9] = vm_utilization; //vm utilization [0-100]
-			    taskLookUpTable[appType.ordinal()][10] = delay_sensitivity; //delay_sensitivity (seconds)
-			    
+				isAttribtuePresent(appElement, "name");
+				SimSettings.APP_TYPES appType = APP_TYPES.valueOf(appElement.getAttribute("name"));
+				
+				String[] elementList = {
+						"usage_percentage", //usage percentage [0-100]
+						"prob_cloud_selection", //prob. of selecting cloud [0-100]
+						"poisson_interarrival", //poisson mean (sec)
+						"active_period", //active period (sec)
+						"idle_period",  //idle period (sec)
+						"data_upload",  //avg data upload (KB)
+						"data_download",  //avg data download (KB)
+						"task_length",  //avg task length (MI)
+						"required_core",  //required # of core
+						"vm_utilization",  //vm utilization [0-100]
+						"delay_sensitivity",  //delay_sensitivity (seconds)
+						"max_distance" //max distance in meters
+						};				
+				for (int j = 0; j < elementList.length; j++) {
+					isElementPresent(appElement, elementList[j]);
+					taskLookUpTable[appType.ordinal()][j] = Double.parseDouble(appElement.getElementsByTagName(elementList[j]).item(0).getTextContent());
+				}
 			}
 	
 		} catch (Exception e) {
@@ -643,6 +733,10 @@ public class SimSettings {
 				isElementPresent(location, "wlan_id");
 				isElementPresent(location, "x_pos");
 				isElementPresent(location, "y_pos");
+				isElementPresent(location, "altitude");
+				isElementPresent(location, "dx");
+				isElementPresent(location, "dy");
+				isElementPresent(location, "moving");
 
 				NodeList hostList = datacenterElement.getElementsByTagName("host");
 				for (int j = 0; j < hostList.getLength(); j++) {
@@ -692,9 +786,6 @@ public class SimSettings {
 		linksDoc.getDocumentElement().normalize();
 		
 		NodeList linksList = linksDoc.getElementsByTagName("link");
-		for(int i = 0; i < linksList.getLength(); i++) {
-			//SimLogger.printLine("No issues yet...cross your fingers!");			
-		}
 		
 		}
 		catch (Exception e) {
@@ -704,6 +795,15 @@ public class SimSettings {
 		}		
 	}
 
+	/**
+	 * Increments random_seed to avoid multiple distributions with the same rng.
+	 * @return Integer for seeding randoms.
+	 */
+	public int getRandomSeed() {
+		int val = RANDOM_SEED;
+		RANDOM_SEED++;
+		return val;
+	}
 	
 	/**
 	 * 
@@ -783,7 +883,7 @@ public class SimSettings {
 	 * Qian get trace enabled infomation 
 	 * @return
 	 */
-	public boolean traceEnalbe() {
+	public boolean traceEnable() {
 		return TRACE_ENABLED;
 	}
 

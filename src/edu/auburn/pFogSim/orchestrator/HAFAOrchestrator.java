@@ -12,24 +12,16 @@ package edu.auburn.pFogSim.orchestrator;
  * 
  */
 import edu.boun.edgecloudsim.core.SimManager;
-import edu.boun.edgecloudsim.core.SimSettings;
-import edu.boun.edgecloudsim.edge_client.CpuUtilizationModel_Custom;
 import edu.boun.edgecloudsim.edge_client.Task;
 import edu.boun.edgecloudsim.edge_orchestrator.EdgeOrchestrator;
 import edu.boun.edgecloudsim.edge_server.EdgeHost;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
-import edu.auburn.pFogSim.netsim.NetworkTopology;
 import edu.auburn.pFogSim.netsim.NodeSim;
-import edu.auburn.pFogSim.util.DataInterpreter;
 import edu.auburn.pFogSim.util.MobileDevice;
 import edu.auburn.pFogSim.netsim.ESBModel;
 import edu.boun.edgecloudsim.utils.Location;
-import edu.boun.edgecloudsim.utils.SimLogger;
-//import edu.boun.edgecloudsim.utils.SimLogger;
-import javafx.util.Pair;
 import edu.auburn.pFogSim.Puddle.Puddle;
-import edu.auburn.pFogSim.Radix.DistRadix;
-
+import edu.auburn.pFogSim.Radix.BinaryHeap;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -42,8 +34,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.cloudbus.cloudsim.Datacenter;
-//import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
-import org.cloudbus.cloudsim.core.CloudSim;
 
 
 /**
@@ -315,7 +305,8 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 				
 				this.addNumProspectiveHosts(mobile.getId(), prospectiveNodes.size());
 				
-				DistRadix sort = new DistRadix(prospectiveNodes, mobile.getLocation()); //use radix sort based on distance from mobile device.
+				//DistRadix sort = new DistRadix(prospectiveNodes, mobile.getLocation()); //use radix sort based on distance from mobile device.
+				BinaryHeap sort = new BinaryHeap(prospectiveNodes.size(), mobile.getLocation(), prospectiveNodes);
 				LinkedList<EdgeHost> nodes = sort.sortNodes();
 				EdgeHost prosHost = nodes.poll();
 					
@@ -384,7 +375,6 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 			// for each such NodeSim object, retrieve the row and add it to selectedDesMap
 			selectedDesMap.put(hostNode, desMap.get(hostNode));	
 		}
-		SimLogger.printLine(" ");
 
 		// continue with processing as earlier.
 		for (Entry<NodeSim, LinkedList<NodeSim>> entry: selectedDesMap.entrySet()) {
@@ -392,7 +382,7 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 			NodeSim des = entry.getKey();
 			LinkedList<NodeSim> path = entry.getValue();
 			if (path == null || path.size() == 0) {
-				EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(mobile.getLocation().getXPos(), mobile.getLocation().getYPos());
+				EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(mobile.getLocation().getXPos(), mobile.getLocation().getYPos(), mobile.getLocation().getAltitude());
 				
 				//double bwCost = mobile.getBWRequirement() * k.getCostPerBW(); 
 				double bwCost = (mobile.getBWRequirement()*8 / (double)1024) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
@@ -411,7 +401,7 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 			else {
 				//SimLogger.getInstance().getCentralizeLogPrinter().println("**********Path From " + src.getWlanId() + " To " + des.getWlanId() + "**********");
 				for (NodeSim node: path) {
-					EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(node.getLocation().getXPos(), node.getLocation().getYPos());
+					EdgeHost k = SimManager.getInstance().getLocalServerManager().findHostByLoc(node.getLocation().getXPos(), node.getLocation().getYPos(), node.getLocation().getAltitude());
 					//double bwCost = mobile.getBWRequirement() * k.getCostPerBW();
 					double bwCost = (mobile.getBWRequirement()*8 / (double)1024) * k.getCostPerBW(); //mobile.getBWRequirement() in KB * 8b/B ==>Kb / 1024 = Mb; k.getCostPerBW() in $/Mb -- Shaik modified
 
@@ -419,7 +409,7 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 					//SimLogger.getInstance().getCentralizeLogPrinter().println("Level:\t" + node.getLevel() + "\tNode:\t" + node.getWlanId() + "\tBWCost:\t" + bwCost + "\tTotalBWCost:\t" + cost);
 					//SimLogger.getInstance().getCentralizeLogPrinter().println("Total data:\t" + mobile.getBWRequirement() + "\tBWCostPerSec:\t" + k.getCostPerBW());
 				}				
-				EdgeHost desHost = SimManager.getInstance().getLocalServerManager().findHostByLoc(des.getLocation().getXPos(), des.getLocation().getYPos());
+				EdgeHost desHost = SimManager.getInstance().getLocalServerManager().findHostByLoc(des.getLocation().getXPos(), des.getLocation().getYPos(), des.getLocation().getAltitude());
 				//double exCost = desHost.getCostPerSec() * ((double)mobile.getTaskLengthRequirement() / desHost.getTotalMips());
 				double exCost = (double)mobile.getTaskLengthRequirement() / (desHost.getPeList().get(0).getMips()) * desHost.getCostPerSec(); // Shaik modified - May 07, 2019.
 
@@ -453,7 +443,7 @@ public class HAFAOrchestrator extends EdgeOrchestrator {
 		for (Double totalCost : costList) {
 			// Get the list of prospective nodes available at that cost
 			for(NodeSim desNode: costMap.get(totalCost)) {
-				host = SimManager.getInstance().getLocalServerManager().findHostByLoc(desNode.getLocation().getXPos(), desNode.getLocation().getYPos());
+				host = SimManager.getInstance().getLocalServerManager().findHostByLoc(desNode.getLocation().getXPos(), desNode.getLocation().getYPos(), desNode.getLocation().getAltitude());
 				hostsSortedByCost.add(host);
 				//System.out.println("Hosts in sorted order of costs:  "+host.getId()+"  at cost:  "+totalCost);
 			}

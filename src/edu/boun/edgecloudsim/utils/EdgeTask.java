@@ -29,8 +29,8 @@ public class EdgeTask {
     public int mobileDeviceId;
     public int desMobileDeviceId; // added by Qian for sperating data sources and consumers.
     public boolean wifi; //added by pFogSim for asking whether a task requires a wifi access point
-    public boolean sens; //added by pFogSim to say whether a device is a sensor
-    public boolean act;  //added by pFogSim to say whether a device is an actuator
+    public boolean sensor; //added by pFogSim to say whether a device is a sensor
+    public boolean actuator;  //added by pFogSim to say whether a device is an actuator
     
     
     /**
@@ -44,20 +44,23 @@ public class EdgeTask {
      * @param _act
      */
     public EdgeTask(int _mobileDeviceId, APP_TYPES _taskType, double _startTime, ExponentialDistribution[][] expRngList, 
-    				boolean _wifi, boolean _sens, boolean _act) {
+    				boolean _wifi, boolean _sensor, boolean _actuator) {
     	mobileDeviceId=_mobileDeviceId;
     	startTime=_startTime;
     	taskType=_taskType;
     	
-    	inputFileSize = (long)expRngList[_taskType.ordinal()][0].sample();
-    	outputFileSize =(long)expRngList[_taskType.ordinal()][1].sample();
-    	length = (long)expRngList[_taskType.ordinal()][2].sample();
+    	final int inputFileSizeIndex = 0;
+		inputFileSize = (long)expRngList[_taskType.ordinal()][inputFileSizeIndex].sample();
+    	final int outputFileSizeIndex = 1;
+		outputFileSize =(long)expRngList[_taskType.ordinal()][outputFileSizeIndex].sample();
+    	final int lengthIndex = 2;
+		length = (long)expRngList[_taskType.ordinal()][lengthIndex].sample();
     	
-    	pesNumber = (int)SimSettings.getInstance().getTaskLookUpTable()[_taskType.ordinal()][8];
+    	pesNumber = (int)SimSettings.getInstance().getTaskLookUpTable()[_taskType.ordinal()][SimSettings.AppStat.CORES_REQUIRED.ordinal()];
     	
     	wifi = _wifi;
-    	sens =  _sens;
-    	act = _act;
+    	sensor =  _sensor;
+    	actuator = _actuator;
 	}
     
     
@@ -202,7 +205,7 @@ public class EdgeTask {
 	 * @return the sens
 	 */
 	public boolean isSens() {
-		return sens;
+		return sensor;
 	}
 
 	
@@ -210,7 +213,7 @@ public class EdgeTask {
 	 * @param sens the sens to set
 	 */
 	public void setSens(boolean sens) {
-		this.sens = sens;
+		this.sensor = sens;
 	}
 
 	
@@ -218,7 +221,7 @@ public class EdgeTask {
 	 * @return the act
 	 */
 	public boolean isAct() {
-		return act;
+		return actuator;
 	}
 
 	
@@ -226,7 +229,7 @@ public class EdgeTask {
 	 * @param act the act to set
 	 */
 	public void setAct(boolean act) {
-		this.act = act;
+		this.actuator = act;
 	}
 
 	

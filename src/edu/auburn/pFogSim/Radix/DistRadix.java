@@ -33,7 +33,6 @@ import edu.auburn.pFogSim.util.DataInterpreter;
 import edu.boun.edgecloudsim.core.SimManager;
 import edu.boun.edgecloudsim.edge_server.EdgeHost;
 import edu.boun.edgecloudsim.utils.Location;
-import edu.boun.edgecloudsim.utils.SimLogger;
 
 
 /**
@@ -44,6 +43,9 @@ import edu.boun.edgecloudsim.utils.SimLogger;
  */
 public class DistRadix {
 	
+	private static final int METERS_PER_KM = 1000;
+	private static final int DIGIT_BASE = 10;
+	private static final double DISTANCE_INCREMENT = 0.001;
 	private ArrayList<EdgeHost> input;
 	private TreeMap<Location, EdgeHost> coordMap;
 	private HashMap<Double, Location> distMap;
@@ -80,8 +82,8 @@ public class DistRadix {
 	 */
 	private void buildCoords() {
 		for(EdgeHost node : input) {
-			coordMap.put(new Location(node.getLocation().getXPos(), node.getLocation().getYPos()), node);
-			coords.add(new Location(node.getLocation().getXPos(), node.getLocation().getYPos()));
+			coordMap.put(new Location(node.getLocation().getXPos(), node.getLocation().getYPos(), node.getLocation().getAltitude()), node);
+			coords.add(new Location(node.getLocation().getXPos(), node.getLocation().getYPos(),node.getLocation().getAltitude()));
 		}
 	}
 	
@@ -93,13 +95,13 @@ public class DistRadix {
 		double dist = 0;
 		for (Location loc : coords) {
 			//dist = Math.sqrt((Math.pow(ref.getXPos() - loc.getXPos(), 2) + Math.pow(ref.getYPos() - loc.getYPos(), 2)));
-			dist = DataInterpreter.measure(ref.getYPos(), ref.getXPos(), loc.getYPos(), loc.getXPos());
+			dist = DataInterpreter.measure(ref.getYPos(), ref.getXPos(), ref.getAltitude(), loc.getYPos(), loc.getXPos(), loc.getAltitude());
 			dist = Math.floor(dist);
 			while(distMap.keySet().contains(dist)) {
-				dist += 0.001;
+				dist += DISTANCE_INCREMENT;
 			}
 			distMap.put(dist, loc);
-			distances.add((int) (dist * 1000));
+			distances.add((int) (dist * METERS_PER_KM));
 		}
 	}
 	
@@ -114,8 +116,7 @@ public class DistRadix {
 		int index=0;
 		//latencies = new double[coords.size()];
 		for (Location loc: coords) {
-			//SimLogger.printLine("Loc: " + loc.getXPos()+"  "+loc.getYPos());
-			latency = ((ESBModel)SimManager.getInstance().getNetworkModel()).getDleay(ref, loc);
+			latency = ((ESBModel)SimManager.getInstance().getNetworkModel()).getDelay(ref, loc);
 			// Shaik *** this may overwrite the previous entry with same latency. hence, entry-value should be a list of locs(of nodes) with same latency, rather than a single loc.
 			//SimLogger.printLine("Latency: " + latency+"  Index: "+index);
 			if (latencyMap.containsKey(latency)) {
@@ -167,20 +168,20 @@ public class DistRadix {
     {
         int output[] = new int[n];//i don't have time to explain counting sort to you
         int i;					  //this is a private class fam... let it be
-        int count[] = new int[10];
+        int count[] = new int[DIGIT_BASE];
         Arrays.fill(count, 0);
  
         for (i = 0; i < n; i++) {
-            count[ (arr[i]/exp)%10 ]++;
+            count[ (arr[i]/exp)%DIGIT_BASE ]++;
         }
  
-        for (i = 1; i < 10; i++) {
+        for (i = 1; i < DIGIT_BASE; i++) {
             count[i] += count[i - 1];
         }
  
         for (i = n - 1; i >= 0; i--){
-            output[count[ (arr[i]/exp)%10 ] - 1] = arr[i];
-            count[ (arr[i]/exp)%10 ]--;
+            output[count[ (arr[i]/exp)%DIGIT_BASE ] - 1] = arr[i];
+            count[ (arr[i]/exp)%DIGIT_BASE ]--;
         }
  
         for (i = 0; i < n; i++) {
@@ -194,23 +195,23 @@ public class DistRadix {
 	 */
 	private void radixSort() {
 		int max = maxArrg();
-		for (int i = 1; max/i > 0; i*=10) {
+		for (int i = 1; max/i > 0; i*=DIGIT_BASE) {
 			countSort(arrgs, arrgs.length, i);
 		}
 	}
 	
 	
 	/**
-	 * get the sorted list
+	 * get the list sorted by distance
 	 * @return
 	 */
 	private LinkedList<EdgeHost> getList() {
 		LinkedList<EdgeHost> output = new LinkedList<EdgeHost>();
-		double dist = 0.0;
+		double dist;
 		Location loc;
 		EdgeHost node;
 		for (int i = 0; i < arrgs.length; i++) {
-			dist = arrgs[i]/1000;
+			dist = arrgs[i]/METERS_PER_KM;
 			loc = distMap.get(dist);
 			node = coordMap.get(loc);
 			output.add(node);
@@ -222,7 +223,7 @@ public class DistRadix {
 	/**
 	 * @author Shaik
 	 * modified by Qian
-	 * get the sorted list
+	 * get the list sorted by latency
 	 * @return
 	 */
 	private LinkedList<EdgeHost> getLatenciesList() {

@@ -9,13 +9,8 @@ package edu.auburn.pFogSim.orchestrator;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.List;
-
 import org.cloudbus.cloudsim.Datacenter;
-import org.cloudbus.cloudsim.Vm;
-import org.cloudbus.cloudsim.core.CloudSim;
-
-import edu.auburn.pFogSim.Radix.DistRadix;
+import edu.auburn.pFogSim.Radix.BinaryHeap;
 import edu.auburn.pFogSim.netsim.ESBModel;
 import edu.auburn.pFogSim.netsim.NodeSim;
 import edu.auburn.pFogSim.util.MobileDevice;
@@ -24,8 +19,6 @@ import edu.boun.edgecloudsim.edge_client.Task;
 import edu.boun.edgecloudsim.edge_orchestrator.EdgeOrchestrator;
 import edu.boun.edgecloudsim.edge_server.EdgeHost;
 import edu.boun.edgecloudsim.edge_server.EdgeVM;
-import edu.boun.edgecloudsim.utils.Location;
-import edu.boun.edgecloudsim.utils.SimLogger;
 
 
 /**
@@ -35,6 +28,7 @@ import edu.boun.edgecloudsim.utils.SimLogger;
  */
 public class EdgeByDistanceOrchestrator extends EdgeOrchestrator {
 
+	private static final int MESSAGES_PER_HOST = 2;
 	ArrayList<EdgeHost> hosts;
 	
 	
@@ -61,7 +55,7 @@ public class EdgeByDistanceOrchestrator extends EdgeOrchestrator {
 		}
 		
 		this.avgNumProspectiveHosts = hosts.size();
-		this.avgNumMessages = this.avgNumProspectiveHosts * 2; // For each service request (i.e. per device), each host receives resource availability request & sends response.
+		this.avgNumMessages = this.avgNumProspectiveHosts * MESSAGES_PER_HOST; // For each service request (i.e. per device), each host receives resource availability request & sends response.
 
 	}
 	
@@ -115,7 +109,8 @@ public class EdgeByDistanceOrchestrator extends EdgeOrchestrator {
 	@Override
 	public void assignHost(MobileDevice mobile) {
 
-		DistRadix sort = new DistRadix(hosts, mobile.getLocation());//use radix sort based on distance from task
+		//DistRadix sort = new DistRadix(hosts, mobile.getLocation());//use radix sort based on distance from task
+		BinaryHeap sort = new BinaryHeap(hosts.size(), mobile.getLocation(), hosts);
 		LinkedList<EdgeHost> nodes = sort.sortNodes();
 		//System.out.print("nodes size: " + nodes.size() + "  Device Id: " + mobile.getId() + "  WAP Id: " + mobile.getLocation().getServingWlanId());
 		EdgeHost host = nodes.poll();
